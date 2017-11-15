@@ -109,7 +109,9 @@ func handleLogItem(itemIn []byte, logFile *os.File) {
             } else {
                 enumString = fmt.Sprintf("unknown (%#x)", C.gNumLogStrings)
             }
-            timeString := time.Unix(logTimeBase, (int64(item.Timestamp) - logTimestampAtBase) * 1000).UTC().Format("2006-01-02_15-04-05_999.999")            
+            microsecondTime := time.Unix(logTimeBase, (int64(item.Timestamp) - logTimestampAtBase) * 1000).UTC()
+            nanosecondTime := microsecondTime.Nanosecond()
+            timeString := fmt.Sprintf("%s_%03d.%03d", microsecondTime.Format("2006-01-02_15-04-05"), nanosecondTime / 1000000, nanosecondTime / 1000)
             itemString = fmt.Sprintf("%s: %s %d (%#x)\n", timeString, enumString, item.Parameter, item.Parameter)
         }
     }
