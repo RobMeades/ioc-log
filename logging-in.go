@@ -51,8 +51,8 @@ type LogItem struct {
 // The size of a single log entry in bytes
 const LOG_ITEM_SIZE int = 12
 
-// A magic enum item, in which the parameter is the UTC time
-const LOG_ITEM_UTC_TIME int = 2
+// A minimum value for current Unix time
+const UNIX_TIME_MIN int = 1510827960
 
 //--------------------------------------------------------------------
 // Variables
@@ -71,12 +71,26 @@ var logTimestampAtBase int64
 // Open a log file
 func openLogFile(directory string, clientIpAddress string) *os.File {
     // File name is the IP address of the client (port number removed),
-    // the dots replaced with dashes, followed by the UTC time so:
-    // 154-46-789-1_2017-11-17_15-35-01.log
-    fileName := fmt.Sprintf("%s%c%s_%s.log", directory, os.PathSeparator, strings.Replace(strings.Split(clientIpAddress, ":")[0], ".", "-", -1), time.Now().UTC().Format("2006-01-02_15-04-05"))
+    // the dots replaced with dashes, followed by the UTC time, with
+    // an x at the start to indicate that this is currently server time
+    // so: x154-46-789-1_2017-11-17_15-35-01.log
+    fileName := fmt.Sprintf("x%s%c%s_%s.log", directory, os.PathSeparator, strings.Replace(strings.Split(clientIpAddress, ":")[0], ".", "-", -1), time.Now().UTC().Format("2006-01-02_15-04-05"))
     logFile, err := os.Create(fileName)
     if err != nil {
         fmt.Fprintf(os.Stderr, "Error creating logfile (%s).\n", err.Error())
+    }
+    
+    return logFile 
+}
+
+// Rename a log file
+func renameLogFile(oldName string, logTime int) *os.File {
+    // Find the _ in the old name and replace the bits after it
+    // with a time generated from logTime
+    newName := fmt.Sprintf("%s_%s.log", strings.Split(oldName, "_")[0], time.Unix(logTime, 0).UTC().Format("2006-01-02_15-04-05"))
+    err := os.Rename(oldName, newName)
+    if err != nil {
+        fmt.Fprintf(os.Stderr, "Error renaming logfile from \"%s\" to \"%s\" (%s).\n", oldName, newName, err.Error())
     }
     
     return logFile 
@@ -102,7 +116,8 @@ func handleLogItem(itemIn []byte, logFile *os.File) {
             // We have a log item, translate it to text
             if item.Enum < int(C.gNumLogStrings) {
                 enumString = C.GoString((*C.char) (unsafe.Pointer(uintptr(unsafe.Pointer(C.gLogStrings)) + uintptr(item.Enum) * unsafe.Sizeof(C.gLogStrings))))
-                if item.Enum == LOG_ITEM_UTC_TIME {
+                // If a current time marker arrives and it looks real then grab it and use it from now on
+                if (item.Enum == C.EVENT_CURRENT_TIME_UTC) && (item.Parameter > UNIX_TIME_MIN) && (logTimeBase == 0) {
                     logTimeBase = int64(item.Parameter)
                     logTimestampAtBase = int64(item.Timestamp)
                 }
@@ -139,7 +154,12 @@ func loggingServer(port string, directory string) {
                     currentServer.Close()
                 }
                 if logFile != nil {
-                    logFile.Close() 
+                    logFile.Close()
+                    if logTimeBase != 0 {
+                        renameLogFile(logFile.Name(), logTimeBase)
+                        logTimeBase = 0;
+                        logTimestampAtBase = 0;
+                    }
                 }
                 currentServer = newServer
                 x, success := currentServer.(*net.TCPConn)
@@ -153,8 +173,6 @@ func loggingServer(port string, directory string) {
                 }
                 fmt.Printf("Logging connection made by %s.\n", currentServer.RemoteAddr().String())
                 logFile = openLogFile(directory, currentServer.RemoteAddr().String())
-                logTimeBase = 0;
-                logTimestampAtBase = 0;
                                 
                 if logFile != nil {
                     // Process datagrams received items in a go routine
