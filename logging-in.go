@@ -27,7 +27,6 @@ import (
     "net"
     "os"
     "log"
-    "bytes"
     "strings"
     "time"
     "encoding/binary"
@@ -39,9 +38,9 @@ import (
 
 // Struct to hold a log item
 type LogItem struct {
-    Timestamp   int // in uSeconds
-    Enum        int
-    Parameter   int
+    Timestamp   uint32 // in uSeconds
+    Enum        uint32
+    Parameter   uint32
 }
 
 //--------------------------------------------------------------------
@@ -52,7 +51,7 @@ type LogItem struct {
 const LOG_ITEM_SIZE int = 12
 
 // A minimum value for current Unix time
-const UNIX_TIME_MIN int = 1510827960
+const UNIX_TIME_MIN uint32 = 1510827960
 
 //--------------------------------------------------------------------
 // Variables
@@ -64,6 +63,9 @@ var logTimeBase int64
 // The timestamp at the base time above
 var logTimestampAtBase int64
 
+// The array of C strings as a slice
+var cLogStrings []*C.char
+
 //--------------------------------------------------------------------
 // Functions
 //--------------------------------------------------------------------
@@ -74,7 +76,7 @@ func openLogFile(directory string, clientIpAddress string) *os.File {
     // the dots replaced with dashes, followed by the UTC time, with
     // an x at the start to indicate that this is currently server time
     // so: x154-46-789-1_2017-11-17_15-35-01.log
-    fileName := fmt.Sprintf("x%s%c%s_%s.log", directory, os.PathSeparator, strings.Replace(strings.Split(clientIpAddress, ":")[0], ".", "-", -1), time.Now().UTC().Format("2006-01-02_15-04-05"))
+    fileName := fmt.Sprintf("%s%cx%s_%s.log", directory, os.PathSeparator, strings.Replace(strings.Split(clientIpAddress, ":")[0], ".", "-", -1), time.Now().UTC().Format("2006-01-02_15-04-05"))
     logFile, err := os.Create(fileName)
     if err != nil {
         fmt.Fprintf(os.Stderr, "Error creating logfile (%s).\n", err.Error())
@@ -84,7 +86,7 @@ func openLogFile(directory string, clientIpAddress string) *os.File {
 }
 
 // Rename a log file
-func renameLogFile(oldName string, logTime int) *os.File {
+func renameLogFile(oldName string, logTime int64) bool {    
     // Find the _ in the old name and replace the bits after it
     // with a time generated from logTime
     newName := fmt.Sprintf("%s_%s.log", strings.Split(oldName, "_")[0], time.Unix(logTime, 0).UTC().Format("2006-01-02_15-04-05"))
@@ -93,42 +95,34 @@ func renameLogFile(oldName string, logTime int) *os.File {
         fmt.Fprintf(os.Stderr, "Error renaming logfile from \"%s\" to \"%s\" (%s).\n", oldName, newName, err.Error())
     }
     
-    return logFile 
+    return (err == nil); 
 }
 
 // Handle a log item
 func handleLogItem(itemIn []byte, logFile *os.File) {
     var item LogItem
-    var err error
     var itemString string
     var enumString string
     
     if len(itemIn) >= LOG_ITEM_SIZE {
-        buf := bytes.NewReader(itemIn)
-        err = binary.Read(buf, binary.LittleEndian, &item.Timestamp)
-        if err != nil {
-            err = binary.Read(buf, binary.LittleEndian, &item.Enum)
-        } 
-        if err != nil {
-            err = binary.Read(buf, binary.LittleEndian, &item.Parameter)
-        }        
-        if err != nil {
-            // We have a log item, translate it to text
-            if item.Enum < int(C.gNumLogStrings) {
-                enumString = C.GoString((*C.char) (unsafe.Pointer(uintptr(unsafe.Pointer(C.gLogStrings)) + uintptr(item.Enum) * unsafe.Sizeof(C.gLogStrings))))
-                // If a current time marker arrives and it looks real then grab it and use it from now on
-                if (item.Enum == C.EVENT_CURRENT_TIME_UTC) && (item.Parameter > UNIX_TIME_MIN) && (logTimeBase == 0) {
-                    logTimeBase = int64(item.Parameter)
-                    logTimestampAtBase = int64(item.Timestamp)
-                }
-            } else {
-                enumString = fmt.Sprintf("unknown (%#x)", C.gNumLogStrings)
+        item.Timestamp = binary.LittleEndian.Uint32(itemIn[0:])
+        item.Enum = binary.LittleEndian.Uint32(itemIn[4:])
+        item.Parameter = binary.LittleEndian.Uint32(itemIn[8:])
+        // We have a log item, translate it to text
+        if item.Enum < uint32(C.gNumLogStrings) {
+            enumString = C.GoString(cLogStrings[item.Enum])
+            // If a current time marker arrives and it looks real then grab it and use it from now on
+            if (item.Enum == C.EVENT_CURRENT_TIME_UTC) && (item.Parameter > UNIX_TIME_MIN) && (logTimeBase == 0) {
+                logTimeBase = int64(item.Parameter)
+                logTimestampAtBase = int64(item.Timestamp)
             }
-            microsecondTime := time.Unix(logTimeBase, (int64(item.Timestamp) - logTimestampAtBase) * 1000).UTC()
-            nanosecondTime := microsecondTime.Nanosecond()
-            timeString := fmt.Sprintf("%s_%03d.%03d", microsecondTime.Format("2006-01-02_15-04-05"), nanosecondTime / 1000000, nanosecondTime / 1000)
-            itemString = fmt.Sprintf("%s: %s %d (%#x)\n", timeString, enumString, item.Parameter, item.Parameter)
+        } else {
+            enumString = fmt.Sprintf("unknown (%#x)", item.Enum)
         }
+        microsecondTime := time.Unix(logTimeBase, (int64(item.Timestamp) - logTimestampAtBase) * 1000).UTC()
+        nanosecondTime := microsecondTime.Nanosecond()
+        timeString := fmt.Sprintf("%s_%03.3f", microsecondTime.Format("2006-01-02_15-04-05"), float64(nanosecondTime / 1000) / 1000)
+        itemString = fmt.Sprintf("%s: %s [%d] %d (%#x)\n", timeString, enumString, item.Enum, item.Parameter, item.Parameter)
     }
     
     if (logFile != nil) && (itemString != "") {
@@ -196,5 +190,8 @@ func loggingServer(port string, directory string) {
 
 // Run the logging input server; this function should never return
 func operateLoggingInputServer(port string, directory string) {
+    // Convert the array of C strings into a slice to make it possible to index into it
+    cLogStrings = (*[1 << 30]*C.char)(unsafe.Pointer(&C.gLogStrings))[:C.gNumLogStrings]
+    
     loggingServer(port, directory)
 }
