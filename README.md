@@ -33,3 +33,7 @@ Each log file will contain lines of the following form:
 `1970-01-01_00-00-00_000.000:   AN_EVENT 0 (0x0)`
 
 ...where `1970-01-01_00-00-00_000.000` is the date/time of the event  on the source device to 1000th of a millisecond accuracy, `AN_EVENT` is the name of the event that occurred, and `0 (0x0)` is the parameter that was associated with the event by the logging source in decimal and hex.
+
+To run the log file server in the background, do something like:
+
+`nohup ./ioc-log 1234 -o log > /dev/null &`
