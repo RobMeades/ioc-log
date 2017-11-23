@@ -70,41 +70,52 @@ var cLogStrings []*C.char
 // Functions
 //--------------------------------------------------------------------
 
-// Open a log file
-func openLogFile(directory string, clientIpAddress string) *os.File {
+// Open two log files, the first for raw output the second for decoded output
+func openLogFiles(directory string, clientIpAddress string) (*os.File, *os.File) {
     // File name is the IP address of the client (port number removed),
     // the dots replaced with dashes, followed by the UTC time, with
     // an x at the start to indicate that this is currently server time
     // so: x154-46-789-1_2017-11-17_15-35-01.log
-    fileName := fmt.Sprintf("%s%cx%s_%s.log", directory, os.PathSeparator, strings.Replace(strings.Split(clientIpAddress, ":")[0], ".", "-", -1), time.Now().UTC().Format("2006-01-02_15-04-05"))
-    logFile, err := os.Create(fileName)
+    baseFileName := fmt.Sprintf("%s%cx%s_%s", directory, os.PathSeparator, strings.Replace(strings.Split(clientIpAddress, ":")[0], ".", "-", -1), time.Now().UTC().Format("2006-01-02_15-04-05"))
+    rawFileName := baseFileName + ".raw"
+    decodedFileName := baseFileName + ".log"
+    rawFile, err := os.Create(rawFileName)
     if err != nil {
-        fmt.Fprintf(os.Stderr, "Error creating logfile (%s).\n", err.Error())
+        fmt.Fprintf(os.Stderr, "Error creating raw log file (%s).\n", err.Error())
     }
     
-    return logFile 
+    decodedFile, err := os.Create(decodedFileName)
+    if err != nil {
+        fmt.Fprintf(os.Stderr, "Error creating decoded log file (%s).\n", err.Error())
+    }
+    
+    return rawFile, decodedFile
 }
 
 // Rename a log file
 func renameLogFile(oldName string, logTime int64) bool {    
-    // Find the _ in the old name and replace the bits after it
+    // Find the bits after 'x' in the old name, then find
+    // the '_' in the old name and replace the bits after it
     // with a time generated from logTime
-    newName := fmt.Sprintf("%s_%s.log", strings.Split(oldName, "_")[0], time.Unix(logTime, 0).UTC().Format("2006-01-02_15-04-05"))
+    xSplit := strings.SplitN(oldName, "x", 2)
+    underscoreSplit:= strings.SplitN(xSplit [len(xSplit ) - 1], "_", 2)
+    ipAddress := underscoreSplit[0]
+    newName := fmt.Sprintf("%s_%s.log", ipAddress, time.Unix(logTime, 0).UTC().Format("2006-01-02_15-04-05"))	
     err := os.Rename(oldName, newName)
     if err != nil {
-        fmt.Fprintf(os.Stderr, "Error renaming logfile from \"%s\" to \"%s\" (%s).\n", oldName, newName, err.Error())
+        fmt.Fprintf(os.Stderr, "Error renaming file from \"%s\" to \"%s\" (%s).\n", oldName, newName, err.Error())
     }
     
     return (err == nil); 
 }
 
 // Handle a log item
-func handleLogItem(itemIn []byte, logFile *os.File) {
+func handleLogItem(itemIn []byte, decodedLogFile *os.File) {
     var item LogItem
     var itemString string
     var enumString string
     
-    if len(itemIn) >= LOG_ITEM_SIZE {
+    if len(itemIn) == LOG_ITEM_SIZE {
         item.Timestamp = binary.LittleEndian.Uint32(itemIn[0:])
         item.Enum = binary.LittleEndian.Uint32(itemIn[4:])
         item.Parameter = binary.LittleEndian.Uint32(itemIn[8:])
@@ -123,16 +134,19 @@ func handleLogItem(itemIn []byte, logFile *os.File) {
         nanosecondTime := microsecondTime.Nanosecond()
         timeString := fmt.Sprintf("%s_%07.3f", microsecondTime.Format("2006-01-02_15-04-05"), float64(nanosecondTime / 1000) / 1000)
         itemString = fmt.Sprintf("%s: %s [%d] %d (%#x)\n", timeString, enumString, item.Enum, item.Parameter, item.Parameter)
+    } else {
+        itemString = fmt.Sprintf("!!! Item of wrong length (%d byte(s) when %d bytes expected) !!!", len(itemIn), LOG_ITEM_SIZE);
     }
     
-    if (logFile != nil) && (itemString != "") {
-        logFile.WriteString(itemString)
+    if (decodedLogFile != nil) && (itemString != "") {
+        decodedLogFile.WriteString(itemString)
     }
 }
 
 // Run a TCP server forever
 func loggingServer(port string, directory string) {
-    var logFile *os.File
+    var decodedLogFile *os.File
+    var rawLogFile *os.File
     var newServer net.Conn
     var currentServer net.Conn
     
@@ -147,14 +161,20 @@ func loggingServer(port string, directory string) {
                 if currentServer != nil {
                     currentServer.Close()
                 }
-                if logFile != nil {
-                    logFile.Close()
+                if rawLogFile != nil {
+                    rawLogFile.Close()
                     if logTimeBase != 0 {
-                        renameLogFile(logFile.Name(), logTimeBase)
-                        logTimeBase = 0;
-                        logTimestampAtBase = 0;
+                        renameLogFile(rawLogFile.Name(), logTimeBase)
                     }
                 }
+                if decodedLogFile != nil {
+                    decodedLogFile.Close()
+                    if logTimeBase != 0 {
+                        renameLogFile(decodedLogFile.Name(), logTimeBase)
+                    }
+                }
+                logTimeBase = 0;
+                logTimestampAtBase = 0;
                 currentServer = newServer
                 x, success := currentServer.(*net.TCPConn)
                 if success {
@@ -166,15 +186,24 @@ func loggingServer(port string, directory string) {
                     log.Printf("Can't cast *net.Conn to *net.TCPConn in order to configure it.\n")
                 }
                 fmt.Printf("Logging connection made by %s.\n", currentServer.RemoteAddr().String())
-                logFile = openLogFile(directory, currentServer.RemoteAddr().String())
+                rawLogFile, decodedLogFile = openLogFiles(directory, currentServer.RemoteAddr().String())
                                 
-                if logFile != nil {
+                if decodedLogFile != nil {
                     // Process datagrams received items in a go routine
                     go func(server net.Conn) {
                         // Read log items until the connection is closed under us
-                        line := make([]byte, LOG_ITEM_SIZE)                
-                        for numBytesIn, err := server.Read(line); (err == nil) && (numBytesIn > 0); numBytesIn, err = server.Read(line) {
-                            handleLogItem(line[:numBytesIn], logFile)
+                        line := make([]byte, LOG_ITEM_SIZE)
+                        pos := 0;
+                        for numBytesIn, err := server.Read(line[pos:]); (err == nil) && (numBytesIn > 0); numBytesIn, err = server.Read(line[pos:]) {
+                            if numBytesIn == len(line) {
+                                handleLogItem(line[:numBytesIn], decodedLogFile)
+                                pos = 0;
+                            } else {
+                                pos = numBytesIn - 1;
+                            }
+                            if rawLogFile != nil {
+                                rawLogFile.Write(line[pos:numBytesIn])
+                            }
                         }
                         fmt.Printf("[Logging connection to %s closed].\n", server.RemoteAddr().String())
                     }(currentServer)
