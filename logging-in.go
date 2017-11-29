@@ -73,10 +73,9 @@ var cLogStrings []*C.char
 // Open two log files, the first for raw output the second for decoded output
 func openLogFiles(directory string, clientIpAddress string) (*os.File, *os.File) {
     // File name is the IP address of the client (port number removed),
-    // the dots replaced with dashes, followed by the UTC time, with
-    // an x at the start to indicate that this is currently server time
-    // so: x154-46-789-1_2017-11-17_15-35-01.log
-    baseFileName := fmt.Sprintf("%s%cx%s_%s", directory, os.PathSeparator, strings.Replace(strings.Split(clientIpAddress, ":")[0], ".", "-", -1), time.Now().UTC().Format("2006-01-02_15-04-05"))
+    // the dots replaced with dashes, followed by the UTC time
+    // so: 154-46-789-1_2017-11-17_15-35-01.log
+    baseFileName := fmt.Sprintf("%s%c%s_%s", directory, os.PathSeparator, strings.Replace(strings.Split(clientIpAddress, ":")[0], ".", "-", -1), time.Now().UTC().Format("2006-01-02_15-04-05"))
     rawFileName := baseFileName + ".raw"
     decodedFileName := baseFileName + ".log"
     rawFile, err := os.Create(rawFileName)
@@ -90,23 +89,6 @@ func openLogFiles(directory string, clientIpAddress string) (*os.File, *os.File)
     }
     
     return rawFile, decodedFile
-}
-
-// Rename a log file
-func renameLogFile(oldName string, logTime int64) bool {    
-    // Find the bits after 'x' in the old name, then find
-    // the '_' in the old name and replace the bits after it
-    // with a time generated from logTime
-    xSplit := strings.SplitN(oldName, "x", 2)
-    underscoreSplit:= strings.SplitN(xSplit [len(xSplit ) - 1], "_", 2)
-    ipAddress := underscoreSplit[0]
-    newName := fmt.Sprintf("%s_%s.log", ipAddress, time.Unix(logTime, 0).UTC().Format("2006-01-02_15-04-05"))	
-    err := os.Rename(oldName, newName)
-    if err != nil {
-        fmt.Fprintf(os.Stderr, "Error renaming file from \"%s\" to \"%s\" (%s).\n", oldName, newName, err.Error())
-    }
-    
-    return (err == nil); 
 }
 
 // Handle a log item
@@ -163,15 +145,9 @@ func loggingServer(port string, directory string) {
                 }
                 if rawLogFile != nil {
                     rawLogFile.Close()
-                    if logTimeBase != 0 {
-                        renameLogFile(rawLogFile.Name(), logTimeBase)
-                    }
                 }
                 if decodedLogFile != nil {
                     decodedLogFile.Close()
-                    if logTimeBase != 0 {
-                        renameLogFile(decodedLogFile.Name(), logTimeBase)
-                    }
                 }
                 logTimeBase = 0;
                 logTimestampAtBase = 0;
