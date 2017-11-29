@@ -195,11 +195,11 @@ func loggingServer(port string, directory string) {
                         line := make([]byte, LOG_ITEM_SIZE)
                         pos := 0;
                         for numBytesIn, err := server.Read(line[pos:]); (err == nil) && (numBytesIn > 0); numBytesIn, err = server.Read(line[pos:]) {
-                            if numBytesIn == len(line) {
-                                handleLogItem(line[:numBytesIn], decodedLogFile)
+                            if pos + numBytesIn == len(line) {
+                                handleLogItem(line[:pos + numBytesIn], decodedLogFile)
                                 pos = 0;
                             } else {
-                                pos = numBytesIn - 1;
+                                pos = numBytesIn;
                             }
                             if rawLogFile != nil {
                                 rawLogFile.Write(line[pos:numBytesIn])
