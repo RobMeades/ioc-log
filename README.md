@@ -39,3 +39,9 @@ A `.log` file will contain lines of the following form:
 To run the log file server in the background, do something like:
 
 `nohup ./ioc-log 1234 -o log > /dev/null &`
+
+To get a nice list of log files with the most recent at the bottom, do something like:
+
+`ls -l -t -r log/*.log`
+
+...where `log/` is the path to your log file directory.
