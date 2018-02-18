@@ -38,7 +38,7 @@ import (
 
 // Struct to hold a log item
 type LogItem struct {
-    Timestamp   uint32 // in uSeconds
+    Timestamp   uint64 // in uSeconds
     Enum        uint32
     Parameter   uint32
 }
@@ -48,7 +48,7 @@ type LogItem struct {
 //--------------------------------------------------------------------
 
 // The size of a single log entry in bytes
-const LOG_ITEM_SIZE int = 12
+const LOG_ITEM_SIZE int = 16
 
 // A minimum value for current Unix time
 const UNIX_TIME_MIN uint32 = 1510827960
@@ -98,9 +98,9 @@ func handleLogItem(itemIn []byte, decodedLogFile *os.File) {
     var enumString string
     
     if len(itemIn) == LOG_ITEM_SIZE {
-        item.Timestamp = binary.LittleEndian.Uint32(itemIn[0:])
-        item.Enum = binary.LittleEndian.Uint32(itemIn[4:])
-        item.Parameter = binary.LittleEndian.Uint32(itemIn[8:])
+        item.Timestamp = binary.LittleEndian.Uint64(itemIn[0:])
+        item.Enum = binary.LittleEndian.Uint32(itemIn[8:])
+        item.Parameter = binary.LittleEndian.Uint32(itemIn[12:])
         // We have a log item, translate it to text
         if item.Enum < uint32(C.gNumLogStrings) {
             enumString = C.GoString(cLogStrings[item.Enum])

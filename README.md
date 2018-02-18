@@ -4,23 +4,23 @@ This repo contains the logging server for the Internet of Chuffs, written in Gol
 # Installation
 Grab the code and build it with:
 
-`go get github.com/u-blox/ioc-log`
+`go get github.com/RobMeades/ioc-log`
 
-The logging server relies on the files `log_enum.h` and `log_srings.c` matching those that were built into the ioc-client.  If you happen to be working with local versions then you should copy these over the installed files and run:
+The logging server relies on the files `log_enum_app.h` and `log_strings_app.c` matching those that were built into the ioc-client.  If you happen to be working with local versions then you should copy these over the installed files and run:
 
-`go build github.com/u-blox/ioc-log`
+`go build github.com/RobMeades/ioc-log`
 
 ...to update the `ioc-log` executable before using it.
 
 # Usage
 To run the code, do something like:
 
-`./ioc-log 1234 -o log`
+`./ioc-log 1234 -o ~/chuffs/ioc-client-logs`
 
 ...where:
 
 - `1234` is the port number that `ioc-log` should receive logging on,
-- `log` is the (optional) directory to store log files.
+- `~/chuffs/ioc-client-logs` is the (optional) directory to store log files.
 
 Log files are named in the form:
 
@@ -38,10 +38,10 @@ A `.log` file will contain lines of the following form:
 
 To run the log file server in the background, do something like:
 
-`nohup ./ioc-log 1234 -o log > /dev/null &`
+`nohup ./ioc-log 1234 -o ~/chuffs/ioc-client-logs > /dev/null &`
 
 To get a nice list of log files with the most recent at the bottom, do something like:
 
-`ls -l -t -r log/*.log`
+`ls -l -t -r ~/chuffs/ioc-client-logs/*.log`
 
-...where `log/` is the path to your log file directory.
+...where `~/chuffs/ioc-client-logs` is the path to your log file directory.
