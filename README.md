@@ -45,3 +45,31 @@ To get a nice list of log files with the most recent at the bottom, do something
 `ls -l -t -r ~/chuffs/ioc-client-logs/*.log`
 
 ...where `~/chuffs/ioc-client-logs` is the path to your log file directory.
+
+# Boot Setup
+To run `ioc-log` at boot, create a file called something like `/lib/systemd/system/ioc-log.service` with contents something like:
+
+```
+[Unit]
+Description=IoC log server
+After=network-online.target
+
+[Service]
+ExecStart=/home/username/ioc-log 1234 -o /home/username/chuffs/ioc-client-logs
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
+```
+...where `username` is replaced by you user name on the system, etc.
+
+Test this with:
+
+`sudo systemctl start ioc-log`
+
+...using `sudo systemctl status ioc-log` to check that it looks OK and then actually running an end-to-end link uploading logs from the [ioc-client](https://github.com/RobMeades/ioc-client).  If all looks good, set it to run at boot with:
+
+`sudo systemctl enable ioc-log`
+
+Reboot and check that it starts correctly; if it does not, check what happened with `sudo journalctl -b` and/or `sudo dmesg`.
