@@ -8,7 +8,7 @@ Grab the code and build it with:
 
 The logging server relies on the files `log_enum_app.h` and `log_strings_app.c` matching those that were built into the ioc-client.  If you happen to be working with local versions then you should copy these over the installed files and run:
 
-`go build github.com/RobMeades/ioc-log`
+`go get github.com/RobMeades/ioc-log`
 
 ...to update the `ioc-log` executable before using it.
 
@@ -55,7 +55,7 @@ Description=IoC log server
 After=network-online.target
 
 [Service]
-ExecStart=/home/username/ioc-log 1234 -o /home/username/chuffs/ioc-client-logs
+ExecStart=/home/username/gocode/bin/ioc-log 1234 -o /home/username/chuffs/ioc-client-logs
 Restart=on-failure
 RestartSec=3
 
