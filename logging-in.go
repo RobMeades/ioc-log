@@ -131,24 +131,15 @@ func loggingServer(port string, directory string) {
     var rawLogFile *os.File
     var newServer net.Conn
     var currentServer net.Conn
-    
+
     listener, err := net.Listen("tcp", ":" + port)
     if err == nil {
         defer listener.Close()
         // Listen for a connection
         for {
-            fmt.Printf("Logging server waiting for a [further] TCP connection on port %s.\n", port)    
+            fmt.Printf("Logging server waiting for a [further] TCP connection on port %s.\n", port)
             newServer, err = listener.Accept()
             if err == nil {
-                if currentServer != nil {
-                    currentServer.Close()
-                }
-                if rawLogFile != nil {
-                    rawLogFile.Close()
-                }
-                if decodedLogFile != nil {
-                    decodedLogFile.Close()
-                }
                 logTimeBase = 0;
                 logTimestampAtBase = 0;
                 currentServer = newServer
@@ -163,33 +154,44 @@ func loggingServer(port string, directory string) {
                 }
                 fmt.Printf("Logging connection made by %s.\n", currentServer.RemoteAddr().String())
                 rawLogFile, decodedLogFile = openLogFiles(directory, currentServer.RemoteAddr().String())
-                                
+
                 if decodedLogFile != nil {
-                    // Process datagrams received items in a go routine
-                    go func(server net.Conn) {
-                        // Read log items until the connection is closed under us
+                    fmt.Printf("Writing to %s and %s.\n", rawLogFile.Name(), decodedLogFile.Name())
+                    // Process datagrams received items in a go routine (server must have no timeout)
+                    go func(server net.Conn, decodedLog *os.File, rawLog *os.File) {
+                        // Read log items until the connection is closed under us.
+                        // Provided server has no read timeont, when we get 0 bytes back
+                        // then it must have closed.
                         line := make([]byte, LOG_ITEM_SIZE)
                         pos := 0;
-                        for numBytesIn, err := server.Read(line[pos:]); (err == nil) && (numBytesIn > 0); numBytesIn, err = server.Read(line[pos:]) {
+                        totalBytes := 0;
+                        for numBytesIn, _ := server.Read(line[pos:]); numBytesIn > 0; numBytesIn, _ = server.Read(line[pos:]) {
                             if pos + numBytesIn == len(line) {
-                                handleLogItem(line[:pos + numBytesIn], decodedLogFile)
+                                handleLogItem(line[:pos + numBytesIn], decodedLog)
                                 pos = 0;
                             } else {
                                 pos = numBytesIn;
                             }
-                            if rawLogFile != nil {
-                                rawLogFile.Write(line[pos:numBytesIn])
+                            if rawLog != nil {
+                                rawLog.Write(line[pos:numBytesIn])
                             }
+                            totalBytes += numBytesIn;
                         }
-                        fmt.Printf("[Logging connection to %s closed].\n", server.RemoteAddr().String())
-                    }(currentServer)
-                }                
+                        fmt.Printf("[Logging connection to %s closed after receiving %d byte(s)].\n", server.RemoteAddr().String(), totalBytes)
+                        fmt.Printf("Closing log file %s.\n", decodedLog.Name())
+                        decodedLog.Close()
+                        if rawLog != nil {
+                            fmt.Printf("Closing log file %s.\n", rawLog.Name())
+                            rawLog.Close()
+                        }
+                    }(currentServer, decodedLogFile, rawLogFile)
+                }
             } else {
                 fmt.Fprintf(os.Stderr, "Error accepting logging connection (%s).\n", err.Error())
             }
         }
     } else {
-        fmt.Fprintf(os.Stderr, "Unable to listen for logging connections on port %s (%s).\n", port, err.Error())        
+        fmt.Fprintf(os.Stderr, "Unable to listen for logging connections on port %s (%s).\n", port, err.Error())
     }
 }
 
