@@ -8,7 +8,7 @@ Grab the code and build it with:
 
 The logging server relies on the files `log_enum_app.h` and `log_strings_app.c` matching those that were built into the ioc-client.  If you happen to be working with local versions then you should copy these over the installed files and run:
 
-`go get github.com/RobMeades/ioc-log`
+`go get -u github.com/RobMeades/ioc-log`
 
 ...to update the `ioc-log` executable before using it.
 
@@ -24,9 +24,9 @@ To run the code, do something like:
 
 Log files are named in the form:
 
-`12.34.56.78_2017-12-17_15-35-01.000`
+`12.34.56.78_2017-12-17_15-35-01_000`
 
-...where `12.34.56.78` is the IP address of the logging source, `2017-12-17` is the date that logging began and `15-35-01.000` is the time that logging began.  Only one source may be connected at any one time, new connections causing old ones to be dropped.
+...where `12.34.56.78` is the IP address of the logging source, `2017-12-17` is the date that logging began and `15-35-01_000` is the time that the log was received at the logging server.  Only one source may be connected at any one time, new connections causing old ones to be dropped.
 
 Two different log files are saved.  The raw received binary logging data is stored in a `.raw` file while the decoded (human readable) logging data is stored in a `.log` file.
 
