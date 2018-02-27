@@ -24,9 +24,9 @@ To run the code, do something like:
 
 Log files are named in the form:
 
-`12.34.56.78_2017-12-17_15-35-01`
+`12.34.56.78_2017-12-17_15-35-01.000`
 
-...where `12.34.56.78` is the IP address of the logging source, `2017-12-17` is the date that logging began and `15-35-01` is the time that logging began.  Only one source may be connected at any one time, new connections causing old ones to be dropped.
+...where `12.34.56.78` is the IP address of the logging source, `2017-12-17` is the date that logging began and `15-35-01.000` is the time that logging began.  Only one source may be connected at any one time, new connections causing old ones to be dropped.
 
 Two different log files are saved.  The raw received binary logging data is stored in a `.raw` file while the decoded (human readable) logging data is stored in a `.log` file.
 
