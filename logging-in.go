@@ -75,7 +75,7 @@ func openLogFiles(directory string, clientIpAddress string) (*os.File, *os.File)
     // File name is the IP address of the client (port number removed),
     // the dots replaced with dashes, followed by the UTC time
     // so: 154-46-789-1_2017-11-17_15-35-01.log
-    baseFileName := fmt.Sprintf("%s%c%s_%s", directory, os.PathSeparator, strings.Replace(strings.Split(clientIpAddress, ":")[0], ".", "-", -1), time.Now().UTC().Format("2006-01-02_15-04-05"))
+    baseFileName := fmt.Sprintf("%s%c%s_%s", directory, os.PathSeparator, strings.Replace(strings.Split(clientIpAddress, ":")[0], ".", "-", -1), time.Now().UTC().Format("2006-01-02_15-04-05.000"))
     rawFileName := baseFileName + ".raw"
     decodedFileName := baseFileName + ".log"
     rawFile, err := os.Create(rawFileName)
