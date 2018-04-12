@@ -31,6 +31,8 @@ const char *gLogStrings[] = {
     "  SOCKET_OPENING",
     "* SOCKET_OPENING_FAILURE",
     "  SOCKET_OPENED",
+    "  SOCKET_CLOSING",
+    "  SOCKET_CLOSED",
     "  TCP_CONNECTING",
     "* TCP_CONNECT_FAILURE",
     "  TCP_CONNECTED",
